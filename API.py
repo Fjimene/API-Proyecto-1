@@ -46,36 +46,97 @@ parser.add_argument('mode', type=int, required=True, help='Modalidad: 1 Mayor, 0
 parser.add_argument('time_signature', type=int, required=True, help='Compás (ejemplo: 4 para 4/4)', location='args')
 
 # =========================
-# Definición de salida
 # =========================
-resource_fields = api.model('Resource', {
+# Modelo de salida del endpoint principal
+# =========================
+# Define el formato de salida que retorna el modelo
+output_model = api.model('Predicción', {
     'Prediccion_popularidad': fields.Float,
 })
 
 # =========================
-# Definir el recurso
+# Endpoint principal de predicción
 # =========================
 @ns.route('/')
 class PopularidadAPI(Resource):
     @ns.doc(parser=parser)
-    @ns.marshal_with(resource_fields)
+    @ns.marshal_with(output_model)
     def get(self):
+        # 1. Parsear los argumentos recibidos
         args = parser.parse_args()
-
-        # Preparar input
         input_dict = {k: args[k] for k in args}
-        input_data = pd.DataFrame([input_dict])
 
-        # Asegurarse que las columnas numéricas sean floats
-        input_data = input_data.astype(float)
+        # 2. Convertir a DataFrame y asegurar tipos numéricos
+        input_df = pd.DataFrame([input_dict]).astype(float)
 
-        # Reordenar las columnas al orden original del modelo
-        input_data = input_data[columnas_modelo]
+        # 3. Ordenar columnas como espera el modelo
+        input_df = input_df[columnas_modelo]
 
-        # Predicción
-        prediccion = model.predict(input_data)[0]
+        # 4. Hacer predicción
+        pred = model.predict(input_df)[0]
 
-        return {'Prediccion_popularidad': prediccion}, 200
+        # 5. Retornar resultado
+        return {'Prediccion_popularidad': pred}, 200
+
+# =========================
+# Modelo de salida del endpoint de ejemplo
+# =========================
+demo_output = api.model('DemoCasos', {
+    'Observacion_1': fields.Raw,
+    'Prediccion_1': fields.Float,
+    'Popularidad_real_1': fields.Integer,
+    'Observacion_2': fields.Raw,
+    'Prediccion_2': fields.Float,
+    'Popularidad_real_2': fields.Integer
+})
+
+# =========================
+# Endpoint con 2 observaciones de ejemplo
+# =========================
+@ns.route('/observaciones')
+class DemoObservaciones(Resource):
+    @ns.marshal_with(demo_output)
+    def get(self):
+        # Ejemplo 1: datos simulados
+        obs1 = {
+            'danceability': 0.305, 'energy': 0.849, 'loudness': -10.795,
+            'speechiness': 0.0549, 'acousticness': 0.000058, 'instrumentalness': 0.056700,
+            'liveness': 0.4640, 'valence': 0.32, 'tempo': 141.793,
+            'duration_ms': 211533, 'key': 9, 'mode': 1, 'time_signature': 4
+        }
+
+        # Ejemplo 2: datos simulados
+        obs2 = {
+            'danceability': 0.55, 'energy': 0.509, 'loudness': -9.661,
+            'speechiness': 0.0362, 'acousticness': 0.777, 'instrumentalness': 0.202,
+            'liveness': 0.1150, 'valence': 0.5440, 'tempo': 90.459,
+            'duration_ms': 216506, 'key': 1, 'mode': 1, 'time_signature': 3
+        }
+
+
+        real_1 = 22
+        real_2 = 37
+
+
+        # Unir en un DataFrame
+        df = pd.DataFrame([obs1, obs2]).astype(float)
+        df = df[columnas_modelo]
+        preds = model.predict(df)
+
+        # Hacer predicciones
+        preds = model.predict(df)
+
+        # Devolver los inputs y sus respectivas predicciones
+        return {
+            'Observacion_1': obs1,
+            'Prediccion_1': float(preds[0]),
+            'Popularidad_real_1': 22,
+            'Error_absoluto_1': round(abs(preds[0] - real_1), 2),
+            'Observacion_2': obs2,
+            'Prediccion_2': float(preds[1]),
+            'Popularidad_real_2': 37,
+            'Error_absoluto_2': round(abs(preds[1] - real_2), 2)
+        }, 200
     
 
 if __name__ == "__main__":
